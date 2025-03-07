@@ -1,26 +1,52 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, FlatList, Text as RNText } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
+import { doc, getDoc, updateDoc, arrayUnion, deleteDoc } from "firebase/firestore";
+import { db } from "../utils/FirebaseConfig";
 import { APIResponse } from '@/interfaces/Responses';
 import { Message } from '@/interfaces/AppInterfaces';
 
-const ChatScreen = () => {
+interface MessageWithKey extends Message {
+    key: string;
+}
+
+const EmpyConversation = () => {
     const router = useRouter();
+    const { id } = useLocalSearchParams();
     const [message, setMessage] = useState("");
-    const [messages, setMessages] = useState<Message[]>([]);
+    const [messages, setMessages] = useState<MessageWithKey[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+
+    useEffect(() => {
+        const fetchMessages = async () => {
+            if (id) {
+                const docRef = doc(db, "conversations", id as string);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    setMessages(data.messages.map((msg: Message, index: number) => ({ ...msg, key: index.toString() })));
+                } else {
+                    console.log("No such document!");
+                }
+            }
+        };
+
+        fetchMessages();
+    }, [id]);
 
     const getResponse = async () => {
         if (!message.trim()) return; // Evitar enviar mensajes vacíos
 
-        const newMessage: Message = {
-          idts: Date.now().toString(),  // Genera un ID único basado en el tiempo
-          text: message,
-          sender: "user",
-          fecha: new Date().toISOString(), // Fecha en formato ISO
-          emisor: "Usuario",  // Puedes cambiarlo si tienes un sistema de autenticación
-          message: message,  // Si `message` es redundante con `text`, considera modificar la interfaz
-      };
+        const newMessage: MessageWithKey = {
+            idts: Date.now().toString(),
+            text: message,
+            sender: "user",
+            fecha: new Date().toISOString(),
+            emisor: "Usuario",
+            message: message,
+            key: Date.now().toString(),
+        };
+
         setMessages(prevMessages => [...prevMessages, newMessage]);
         setMessage(""); // Limpiar el input después de enviar
 
@@ -29,23 +55,29 @@ const ChatScreen = () => {
             const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=AIzaSyDo0NUkRMYfqvdJWrCn0Ty5LU8NAXHW4tw", {
                 method: "POST",
                 body: JSON.stringify({
-                    "contents": [{
-                        "parts": [{ "text": newMessage.text }]
-                    }]
+                    "contents": [{ "parts": [{ "text": newMessage.text }] }]
                 })
             });
 
             const data: APIResponse = await response.json();
-            const aiMessage: Message = {
-              idts: Date.now().toString(), // Genera un ID único basado en el tiempo
-              text: data?.candidates[0]?.content?.parts[0]?.text || "No response",
-              sender: "bot",
-              fecha: new Date().toISOString(), // Fecha en formato ISO
-              emisor: "AI",  // Nombre del emisor
-              message: data?.candidates[0]?.content?.parts[0]?.text || "No response", // Si es redundante, considera eliminarlo de la interfaz
-          };
-          
+            const aiMessage: MessageWithKey = {
+                idts: Date.now().toString(),
+                text: data?.candidates[0]?.content?.parts[0]?.text || "No response",
+                sender: "bot",
+                fecha: new Date().toISOString(),
+                emisor: "AI",
+                message: data?.candidates[0]?.content?.parts[0]?.text || "No response",
+                key: Date.now().toString(),
+            };
+
             setMessages(prevMessages => [...prevMessages, aiMessage]);
+
+            // Actualizar la conversación en Firebase
+            const docRef = doc(db, "conversations", id as string);
+            await updateDoc(docRef, {
+                messages: arrayUnion(newMessage, aiMessage),
+                title: messages.length === 0 ? newMessage.text : messages[0].text // Actualizar el título si es el primer mensaje
+            });
         } catch (error) {
             console.log("Error:", error);
         } finally {
@@ -53,11 +85,40 @@ const ChatScreen = () => {
         }
     };
 
+    const handleBack = async () => {
+        if (messages.length > 0) {
+            try {
+                const docRef = doc(db, "conversations", id as string);
+                await updateDoc(docRef, {
+                    messages: messages.map(msg => ({
+                        idts: msg.idts,
+                        text: msg.text,
+                        sender: msg.sender,
+                        fecha: msg.fecha,
+                        emisor: msg.emisor,
+                        message: msg.message,
+                    })),
+                    title: messages[0].text // Actualizar el título con el primer mensaje
+                });
+            } catch (error) {
+                console.log("Error updating conversation:", error);
+            }
+        } else {
+            try {
+                const docRef = doc(db, "conversations", id as string);
+                await deleteDoc(docRef); // Eliminar la conversación si no hay mensajes
+            } catch (error) {
+                console.log("Error deleting conversation:", error);
+            }
+        }
+        router.push("/dashboard"); // Navegar de vuelta al Dashboard
+    };
+
     return (
         <View style={styles.container}>
             {/* Encabezado */}
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()}>
+                <TouchableOpacity onPress={handleBack}>
                     <Image source={require("../assets/images/Vector 1 (Stroke).png")} style={styles.icon} />
                 </TouchableOpacity>
                 <Image source={require("../assets/images/Vector.png")} style={styles.logo} />
@@ -66,7 +127,7 @@ const ChatScreen = () => {
             {/* Área de chat */}
             <FlatList
                 data={messages}
-                keyExtractor={(_, index) => index.toString()}
+                keyExtractor={(item) => item.key}
                 renderItem={({ item }) => (
                     <View style={[styles.messageBubble, item.sender === "user" ? styles.userBubble : styles.botBubble]}>
                         <RNText style={styles.messageText}>{item.text}</RNText>
@@ -108,6 +169,19 @@ const styles = StyleSheet.create({
     },
     icon: { tintColor: "#FFFFFF", resizeMode: "contain" },
     logo: { width: 30, height: 30, tintColor: "#FFFFFF" },
+    newConversationButton: {
+        backgroundColor: "#4CAF50",
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        borderRadius: 10,
+        alignSelf: "center",
+        marginBottom: 10,
+    },
+    newConversationText: {
+        color: "#FFFFFF",
+        fontSize: 16,
+        fontWeight: "bold",
+    },
     messageBubble: {
         maxWidth: "80%",
         padding: 10,
@@ -140,4 +214,4 @@ const styles = StyleSheet.create({
     sendIcon: { width: 24, height: 24, resizeMode: "contain" },
 });
 
-export default ChatScreen;
+export default EmpyConversation;

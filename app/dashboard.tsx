@@ -1,19 +1,98 @@
-import React from "react";
-import { View, Text, TouchableOpacity, Image, StyleSheet } from "react-native";
+import React, { useEffect, useState } from "react";
+import { View, Text, TouchableOpacity, Image, StyleSheet, FlatList, Alert } from "react-native";
+import { useRouter } from "expo-router";
+import { collection, getDocs, deleteDoc, doc } from "firebase/firestore";
+import { db } from "../utils/FirebaseConfig";
+import { saveConversation } from "../utils/saveConversation"; // Asegúrate de importar la función correctamente
 
-const Dashboard = () => {
+interface Conversation {
+  id: string;
+  title: string;
+  messages: string[];
+}
+
+const Dashboard: React.FC = () => {
+  const router = useRouter();
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+
+  const fetchConversations = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, "conversations"));
+      const data: Conversation[] = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Conversation[];
+      setConversations(data);
+    } catch (error) {
+      console.error("Error fetching conversations:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchConversations();
+  }, []);
+
+  const handleNewChat = async () => {
+    const newChatRef = await saveConversation([]); // Iniciar una nueva conversación sin mensajes predefinidos
+    if (newChatRef) {
+      fetchConversations(); // Actualiza el historial después de guardar la nueva conversación
+      router.push({ pathname: `/empyConversation`, params: { id: newChatRef.id } });
+    }
+  };
+
+  const handleClearConversations = async () => {
+    Alert.alert(
+      "Clear Conversations",
+      "Are you sure you want to delete all conversations?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "OK",
+          onPress: async () => {
+            try {
+              const querySnapshot = await getDocs(collection(db, "conversations"));
+              const deletePromises = querySnapshot.docs.map(doc => deleteDoc(doc.ref));
+              await Promise.all(deletePromises);
+              setConversations([]); // Limpiar el estado local
+            } catch (error) {
+              console.error("Error clearing conversations:", error);
+            }
+          },
+        },
+      ],
+      { cancelable: false }
+    );
+  };
+
   return (
     <View style={styles.container}>
       {/* Encabezado */}
-      <TouchableOpacity style={styles.header}>
+      <TouchableOpacity style={styles.header} onPress={handleNewChat}>
         <Image source={require("../assets/images/mensaje.png")} style={styles.chatIcon} />
         <Text style={styles.headerText}>New Chat</Text>
         <Image source={require("../assets/images/ir2.png")} style={styles.arrowIcon} />
       </TouchableOpacity>
 
+      {/* Historial de conversaciones */}
+      <FlatList
+        data={conversations}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={styles.historyItem}
+            onPress={() => router.push({ pathname: `/empyConversation`, params: { id: item.id } })}
+          >
+            <Text style={styles.historyText}>{item.title}</Text>
+          </TouchableOpacity>
+        )}
+      />
+
       {/* Opciones del menú */}
       <View style={styles.menu}>
-        <TouchableOpacity style={styles.menuItem}>
+        <TouchableOpacity style={styles.menuItem} onPress={handleClearConversations}>
           <Image source={require("../assets/images/basura.png")} style={styles.icon} />
           <Text style={styles.menuText}>Clear conversations</Text>
         </TouchableOpacity>
@@ -74,6 +153,15 @@ const styles = StyleSheet.create({
     width: 15,
     height: 15,
     tintColor: "#FFFFFF",
+  },
+  historyItem: {
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#333",
+  },
+  historyText: {
+    color: "#FFFFFF",
+    fontSize: 16,
   },
   menu: {
     marginTop: 10,
