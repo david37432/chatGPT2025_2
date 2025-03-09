@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from "react";
 import { View, Text, TouchableOpacity, Image, StyleSheet, FlatList, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { collection, getDocs, deleteDoc, doc } from "firebase/firestore";
 import { db } from "../utils/FirebaseConfig";
 import { saveConversation } from "../utils/saveConversation"; // Asegúrate de importar la función correctamente
+import { useEffect, useState } from "react";
 
 interface Conversation {
   id: string;
@@ -127,8 +127,10 @@ const Dashboard: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#1E1E1E",
+    backgroundColor: "#343541",
     paddingHorizontal: 15,
+    paddingTop: 40,
+    paddingBottom: 10,
   },
   header: {
     flexDirection: "row",

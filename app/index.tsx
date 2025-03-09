@@ -1,20 +1,34 @@
-import { Button, View } from "react-native";
-import { useNavigation } from "@react-navigation/native";
-import { router, useRouter } from "expo-router";
+import { useEffect } from "react";
+import { View, Image, StyleSheet } from "react-native";
+import { useRouter } from "expo-router";
 
-export default function Index() {
-  const navigation = useNavigation();
+export default function SplashScreen() {
+  const router = useRouter();
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      router.push("/examples"); // Cambia la ruta según sea necesario
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
-    <View
-      style={{
-        flex: 1,
-        justifyContent: "center",
-        alignItems: "center",
-      }}
-    >
-      <Button title="Ir a Dashboard" onPress={() => router.push("/dashboard")} />
-      <Button title="Ir a Welcome" onPress={() => router.push("/welcome")} />
+    <View style={styles.container}>
+      <Image source={require("../assets/images/Frame 1.png")} style={styles.logo} />
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: '#343541',
+  },
+  logo: {
+    width: 200,
+    height: 200,
+    resizeMode: "contain",
+  },
+});

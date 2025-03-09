@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, FlatList, Text as RNText } from "react-native";
+import { View, TextInput, TouchableOpacity, Image, StyleSheet, FlatList, Text as RNText, KeyboardAvoidingView, Platform } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { doc, getDoc, updateDoc, arrayUnion, deleteDoc } from "firebase/firestore";
 import { db } from "../utils/FirebaseConfig";
 import { APIResponse } from '@/interfaces/Responses';
 import { Message } from '@/interfaces/AppInterfaces';
+import { Ionicons } from '@expo/vector-icons';
 
 interface MessageWithKey extends Message {
     key: string;
@@ -25,18 +26,15 @@ const EmpyConversation = () => {
                 if (docSnap.exists()) {
                     const data = docSnap.data();
                     setMessages(data.messages.map((msg: Message, index: number) => ({ ...msg, key: index.toString() })));
-                } else {
-                    console.log("No such document!");
                 }
             }
         };
-
         fetchMessages();
     }, [id]);
 
     const getResponse = async () => {
-        if (!message.trim()) return; // Evitar enviar mensajes vacíos
-
+        if (!message.trim()) return;
+        
         const newMessage: MessageWithKey = {
             idts: Date.now().toString(),
             text: message,
@@ -48,17 +46,15 @@ const EmpyConversation = () => {
         };
 
         setMessages(prevMessages => [...prevMessages, newMessage]);
-        setMessage(""); // Limpiar el input después de enviar
+        setMessage("");
 
         try {
             setIsLoading(true);
-            const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=AIzaSyDo0NUkRMYfqvdJWrCn0Ty5LU8NAXHW4tw", {
+            const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=AIzaSyCFPEdbkbO_90iTylK8KrsOtQzKSVCxiNE", {
                 method: "POST",
-                body: JSON.stringify({
-                    "contents": [{ "parts": [{ "text": newMessage.text }] }]
-                })
+                body: JSON.stringify({ "contents": [{ "parts": [{ "text": newMessage.text }] }] })
             });
-
+            
             const data: APIResponse = await response.json();
             const aiMessage: MessageWithKey = {
                 idts: Date.now().toString(),
@@ -69,14 +65,13 @@ const EmpyConversation = () => {
                 message: data?.candidates[0]?.content?.parts[0]?.text || "No response",
                 key: Date.now().toString(),
             };
-
+            
             setMessages(prevMessages => [...prevMessages, aiMessage]);
-
-            // Actualizar la conversación en Firebase
+            
             const docRef = doc(db, "conversations", id as string);
             await updateDoc(docRef, {
                 messages: arrayUnion(newMessage, aiMessage),
-                title: messages.length === 0 ? newMessage.text : messages[0].text // Actualizar el título si es el primer mensaje
+                title: messages.length === 0 ? newMessage.text : messages[0].text
             });
         } catch (error) {
             console.log("Error:", error);
@@ -85,46 +80,15 @@ const EmpyConversation = () => {
         }
     };
 
-    const handleBack = async () => {
-        if (messages.length > 0) {
-            try {
-                const docRef = doc(db, "conversations", id as string);
-                await updateDoc(docRef, {
-                    messages: messages.map(msg => ({
-                        idts: msg.idts,
-                        text: msg.text,
-                        sender: msg.sender,
-                        fecha: msg.fecha,
-                        emisor: msg.emisor,
-                        message: msg.message,
-                    })),
-                    title: messages[0].text // Actualizar el título con el primer mensaje
-                });
-            } catch (error) {
-                console.log("Error updating conversation:", error);
-            }
-        } else {
-            try {
-                const docRef = doc(db, "conversations", id as string);
-                await deleteDoc(docRef); // Eliminar la conversación si no hay mensajes
-            } catch (error) {
-                console.log("Error deleting conversation:", error);
-            }
-        }
-        router.push("/dashboard"); // Navegar de vuelta al Dashboard
-    };
-
     return (
-        <View style={styles.container}>
-            {/* Encabezado */}
+        <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : "height"}>
             <View style={styles.header}>
-                <TouchableOpacity onPress={handleBack}>
-                    <Image source={require("../assets/images/Vector 1 (Stroke).png")} style={styles.icon} />
+            <TouchableOpacity onPress={() => router.navigate("/dashboard")}>
+                    <Ionicons name="menu" size={30} color="white" />
                 </TouchableOpacity>
                 <Image source={require("../assets/images/Vector.png")} style={styles.logo} />
             </View>
 
-            {/* Área de chat */}
             <FlatList
                 data={messages}
                 keyExtractor={(item) => item.key}
@@ -138,7 +102,6 @@ const EmpyConversation = () => {
 
             {isLoading && <RNText style={styles.loadingText}>Cargando...</RNText>}
 
-            {/* Barra de entrada */}
             <View style={styles.inputContainer}>
                 <TextInput
                     style={styles.input}
@@ -148,40 +111,25 @@ const EmpyConversation = () => {
                     onChangeText={setMessage}
                 />
                 <TouchableOpacity style={styles.sendButton} onPress={getResponse}>
-                    <Image source={require("../assets/images/Frame 12.png")} style={styles.sendIcon} />
+                    <Ionicons name="send" size={24} color="#10A37F" />
                 </TouchableOpacity>
             </View>
-        </View>
+        </KeyboardAvoidingView>
     );
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: "#1E1E1E" },
+    container: { flex: 1, backgroundColor: '#343541', paddingTop: 40, paddingBottom: 25 },
     header: {
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
         paddingHorizontal: 20,
         paddingVertical: 15,
-        backgroundColor: "#1E1E1E",
         borderBottomWidth: 1,
         borderBottomColor: "#333",
     },
-    icon: { tintColor: "#FFFFFF", resizeMode: "contain" },
     logo: { width: 30, height: 30, tintColor: "#FFFFFF" },
-    newConversationButton: {
-        backgroundColor: "#4CAF50",
-        paddingVertical: 10,
-        paddingHorizontal: 20,
-        borderRadius: 10,
-        alignSelf: "center",
-        marginBottom: 10,
-    },
-    newConversationText: {
-        color: "#FFFFFF",
-        fontSize: 16,
-        fontWeight: "bold",
-    },
     messageBubble: {
         maxWidth: "80%",
         padding: 10,
@@ -197,9 +145,9 @@ const styles = StyleSheet.create({
         alignItems: "center",
         paddingHorizontal: 15,
         paddingVertical: 10,
+        paddingBottom: 30,
         borderTopWidth: 1,
         borderTopColor: "#333",
-        backgroundColor: "#1E1E1E",
     },
     input: {
         flex: 1,
@@ -210,8 +158,7 @@ const styles = StyleSheet.create({
         borderRadius: 25,
         fontSize: 16,
     },
-    sendButton: { marginLeft: 10, padding: 10 },
-    sendIcon: { width: 24, height: 24, resizeMode: "contain" },
+    sendButton: { marginLeft: 10 },
 });
 
 export default EmpyConversation;
