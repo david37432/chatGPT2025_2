@@ -33,7 +33,11 @@ const Dashboard: React.FC = () => {
   }, []);
 
   const handleNewChat = async () => {
-    router.push("/empyConversation"); // Navega a la pantalla de nueva conversación
+    const newChatRef = await saveConversation([]); // Iniciar una nueva conversación sin mensajes predefinidos
+    if (newChatRef) {
+      fetchConversations(); // Actualiza el historial después de guardar la nueva conversación
+      router.push({ pathname: `/empyConversation`, params: { id: newChatRef.id } });
+    }
   };
 
   const handleClearConversations = async () => {
@@ -166,7 +170,7 @@ const styles = StyleSheet.create({
   },
   menuItem: {
     flexDirection: "row",
-    alignItems: "baseline",
+    alignItems: "center",
     paddingVertical: 12,
   },
   icon: {
