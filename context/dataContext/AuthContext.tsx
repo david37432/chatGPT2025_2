@@ -40,7 +40,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signIn = async (email: string, password: string) => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      router.push("/empyConversation"); // ✅ Redirige tras login exitoso
+      router.push("/dashboard"); // ✅ Redirige tras login exitoso
       return true;
     } catch (error) {
       console.error("Error al iniciar sesión:", error);
@@ -52,7 +52,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signUp = async (email: string, password: string) => {
     try {
       await createUserWithEmailAndPassword(auth, email, password);
-      router.push("/empyConversation"); // ✅ Redirige tras registro exitoso
+      router.push("/dashboard"); // ✅ Redirige tras registro exitoso
     } catch (error) {
       console.error("Error al registrarse:", error);
     }
