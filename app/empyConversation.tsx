@@ -1,125 +1,93 @@
 import React, { useState, useEffect } from "react";
-import { View, TextInput, TouchableOpacity, Image, StyleSheet, FlatList, Text as RNText, KeyboardAvoidingView, Platform } from "react-native";
+import {
+    View,
+    TextInput,
+    TouchableOpacity,
+    StyleSheet,
+    FlatList,
+    Text as RNText,
+    KeyboardAvoidingView,
+    Platform,
+    Image
+} from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { doc, getDoc, updateDoc, arrayUnion, deleteDoc } from "firebase/firestore";
-import { db } from "../utils/FirebaseConfig";
-import { APIResponse } from '@/interfaces/Responses';
-import { Message } from '@/interfaces/AppInterfaces';
-import { Ionicons } from '@expo/vector-icons';
+import { useDataContext } from "@/context/dataContext/DataContext";
+import { Ionicons } from "@expo/vector-icons";
 
-interface MessageWithKey extends Message {
-    key: string;
-}
-
-const EmpyConversation = () => {
+const EmptyConversation = () => {
     const router = useRouter();
     const { id } = useLocalSearchParams();
+    const { messages, isLoading, fetchMessages, sendMessage } = useDataContext();
     const [message, setMessage] = useState("");
-    const [messages, setMessages] = useState<MessageWithKey[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
 
     useEffect(() => {
-        const fetchMessages = async () => {
-            if (id) {
-                const docRef = doc(db, "conversations", id as string);
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    setMessages(data.messages.map((msg: Message, index: number) => ({ ...msg, key: index.toString() })));
-                }
-            }
-        };
-        fetchMessages();
+        if (id) fetchMessages(id as string);
     }, [id]);
 
-    const getResponse = async () => {
-        if (!message.trim()) return;
-        
-        const newMessage: MessageWithKey = {
-            idts: Date.now().toString(),
-            text: message,
-            sender: "user",
-            fecha: new Date().toISOString(),
-            emisor: "Usuario",
-            message: message,
-            key: Date.now().toString(),
-        };
-
-        setMessages(prevMessages => [...prevMessages, newMessage]);
+    const handleSend = async () => {
+        if (!message.trim() || !id) return;
+        await sendMessage(message, id as string);
         setMessage("");
-
-        try {
-            setIsLoading(true);
-            const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=AIzaSyCFPEdbkbO_90iTylK8KrsOtQzKSVCxiNE", {
-                method: "POST",
-                body: JSON.stringify({ "contents": [{ "parts": [{ "text": newMessage.text }] }] })
-            });
-            
-            const data: APIResponse = await response.json();
-            const aiMessage: MessageWithKey = {
-                idts: Date.now().toString(),
-                text: data?.candidates[0]?.content?.parts[0]?.text || "No response",
-                sender: "bot",
-                fecha: new Date().toISOString(),
-                emisor: "AI",
-                message: data?.candidates[0]?.content?.parts[0]?.text || "No response",
-                key: Date.now().toString(),
-            };
-            
-            setMessages(prevMessages => [...prevMessages, aiMessage]);
-            
-            const docRef = doc(db, "conversations", id as string);
-            await updateDoc(docRef, {
-                messages: arrayUnion(newMessage, aiMessage),
-                title: messages.length === 0 ? newMessage.text : messages[0].text
-            });
-        } catch (error) {
-            console.log("Error:", error);
-        } finally {
-            setIsLoading(false);
-        }
     };
 
     return (
-        <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-            <View style={styles.header}>
-            <TouchableOpacity onPress={() => router.navigate("/dashboard")}>
-                    <Ionicons name="menu" size={30} color="white" />
-                </TouchableOpacity>
-                <Image source={require("../assets/images/Vector.png")} style={styles.logo} />
-            </View>
+        <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={{ flex: 1 }}
+        >
+            <View style={styles.container}>
+                <View style={styles.header}>
+                    <TouchableOpacity onPress={() => router.navigate("/dashboard")}>
+                        <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+                    </TouchableOpacity>
+                    <Image
+                        source={require("../assets/images/Vector.png")}
+                        style={styles.logo}
+                    />
+                    <View style={{ width: 24 }} />
+                </View>
 
-            <FlatList
-                data={messages}
-                keyExtractor={(item) => item.key}
-                renderItem={({ item }) => (
-                    <View style={[styles.messageBubble, item.sender === "user" ? styles.userBubble : styles.botBubble]}>
-                        <RNText style={styles.messageText}>{item.text}</RNText>
-                    </View>
-                )}
-                contentContainerStyle={{ padding: 10 }}
-            />
-
-            {isLoading && <RNText style={styles.loadingText}>Cargando...</RNText>}
-
-            <View style={styles.inputContainer}>
-                <TextInput
-                    style={styles.input}
-                    placeholder="Type a message..."
-                    placeholderTextColor="#888"
-                    value={message}
-                    onChangeText={setMessage}
+                <FlatList
+                    data={messages}
+                    keyExtractor={(item) => item.key}
+                    renderItem={({ item }) => (
+                        <View
+                            style={[
+                                styles.messageBubble,
+                                item.sender === "user" ? styles.userBubble : styles.botBubble,
+                            ]}
+                        >
+                            <RNText style={styles.messageText}>{item.text}</RNText>
+                        </View>
+                    )}
+                    contentContainerStyle={{ padding: 10 }}
+                    ListEmptyComponent={
+                        <RNText style={styles.loadingText}>
+                            {isLoading ? "Cargando..." : "No hay mensajes aún."}
+                        </RNText>
+                    }
                 />
-                <TouchableOpacity style={styles.sendButton} onPress={getResponse}>
-                    <Ionicons name="send" size={24} color="#10A37F" />
-                </TouchableOpacity>
+
+                <View style={styles.inputContainer}>
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Escribe un mensaje..."
+                        placeholderTextColor="#888"
+                        value={message}
+                        onChangeText={setMessage}
+                        onSubmitEditing={handleSend}
+                    />
+                    <TouchableOpacity onPress={handleSend} disabled={isLoading} style={styles.sendButton}>
+                        <Ionicons name="send" size={24} color={isLoading ? "#888" : "#4CAF50"} />
+                    </TouchableOpacity>
+                </View>
             </View>
         </KeyboardAvoidingView>
     );
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#343541', paddingTop: 40, paddingBottom: 25 },
+    container: { flex: 1, backgroundColor: "#343541", paddingTop: 40, paddingBottom: 25 },
     header: {
         flexDirection: "row",
         alignItems: "center",
@@ -161,4 +129,4 @@ const styles = StyleSheet.create({
     sendButton: { marginLeft: 10 },
 });
 
-export default EmpyConversation;
+export default EmptyConversation;

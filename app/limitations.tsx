@@ -41,7 +41,11 @@ export default function capabilities() {
      </View>
 
       <TouchableOpacity style={styles.button} onPress={() => router.navigate("/empyConversation")}>
-        <Text style={styles.buttonText}>Next</Text>
+        <Text style={styles.buttonText}>Start</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.button} onPress={() => router.navigate("/autentication")}>
+        <Text style={styles.buttonText}>Sign In</Text>
       </TouchableOpacity>
 
     </View>
